@@ -6,6 +6,7 @@ Core correctness tests and image round-trip tests.
 """
 
 import os
+import hashlib
 import pytest
 from lz78 import compress, decompress, compress_ratio
 
@@ -62,9 +63,14 @@ class TestImageRoundTrip:
             assert decompressed == original, f"Round-trip failed for {os.path.basename(img_path)}"
 
             ratio = compress_ratio(original, compressed)
+            original_sha256 = hashlib.sha256(original).hexdigest()
+            decompressed_sha256 = hashlib.sha256(decompressed).hexdigest()
             print(f"\n{os.path.basename(img_path)}: "
                   f"{len(original):,} → {len(compressed):,} bytes "
                   f"(ratio: {ratio:.3f})")
+            print(f"SHA256 original:     {original_sha256}")
+            print(f"SHA256 decompressed: {decompressed_sha256}")
+            print(f"{os.path.basename(img_path)}: IDENTICAL")
 
 
 if __name__ == '__main__':

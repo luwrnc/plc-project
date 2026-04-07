@@ -60,17 +60,41 @@ python3 cli.py -c -i myfile.txt -o myfile.txt.lz78 -v
 python3 -m pytest tests/test_lz78.py -v
 ```
 
+To print the per-image integrity details from the round-trip test, run:
+
+```bash
+python3 -m pytest tests/test_lz78.py -v -s
+```
+
+You will see output confirming that the original and decompressed bytes are identical for each image.
+
+### Verify no data loss manually
+
+After compressing and decompressing a file, compare the original and restored files byte-for-byte:
+
+```bash
+diff <(xxd "tests/images/images (2).jpeg") <(xxd "images_2_decompressed.jpeg") \
+	&& echo "Image 2: IDENTICAL" \
+	|| echo "Image 2: DIFFERENT"
+```
+
+You can also compare hashes:
+
+```bash
+shasum -a 256 "tests/images/images (2).jpeg" "images_2_decompressed.jpeg"
+```
+
 ## CLI Options
 
-| Flag | Description |
-|------|-------------|
-| `-c` | Compress mode |
-| `-d` | Decompress mode |
-| `-i <file>` | Input file path (required) |
+| Flag        | Description                                  |
+| ----------- | -------------------------------------------- |
+| `-c`        | Compress mode                                |
+| `-d`        | Decompress mode                              |
+| `-i <file>` | Input file path (required)                   |
 | `-o <file>` | Output file path (auto-generated if omitted) |
-| `-v` | Verbose — print size, ratio, time stats |
+| `-v`        | Verbose — print size, ratio, time stats      |
 
 ## Notes
 
 - Compression is **lossless**: `decompress(compress(file)) == original file` for any input.
-- JPEG/PNG files are already compressed, so LZ78 output will be *larger* than the original. LZ78 works best on uncompressed data like plain text or raw binary.
+- JPEG/PNG files are already compressed, so LZ78 output will be _larger_ than the original. LZ78 works best on uncompressed data like plain text or raw binary.
