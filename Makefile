@@ -3,7 +3,7 @@
 # Build and test automation for the project
 
 CC := gcc
-CFLAGS := -Wall -Wextra -pedantic
+CFLAGS := -Wall -Wextra -Werror -ansi -pedantic
 
 MAIN_TARGET := lz78_main
 TEST_TARGET := lz78_test
@@ -32,8 +32,8 @@ lz78.o: lz78.c lz78.h
 test: test-c
 
 test-c: $(TEST_TARGET)
+	mkdir -p tests/artifacts
 	./$(TEST_TARGET)
-
 
 clean:
 	rm -f *.o $(MAIN_TARGET) $(TEST_TARGET)

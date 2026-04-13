@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/stat.h>
 
 #include "lz78.h"
 
@@ -29,12 +27,6 @@ static const char *base_name(const char *path) {
     return slash == NULL ? path : slash + 1;
 }
 
-static int ensure_artifact_dir(void) {
-    if (mkdir(ARTIFACT_DIR, 0755) == 0 || errno == EEXIST) {
-        return 1;
-    }
-    return 0;
-}
 
 static int read_file(const char *path, unsigned char **data, size_t *size) {
     FILE *fp;
@@ -129,11 +121,6 @@ int main(void) {
 
     had_failure = 0;
 
-    if (!ensure_artifact_dir()) {
-        fprintf(stderr, "Cannot create %s\n", ARTIFACT_DIR);
-        return 1;
-    }
-
     for (i = 0U; i < TEST_FILE_COUNT; i++) {
         const char *input_path = TEST_FILES[i];
         const char *name = base_name(input_path);
@@ -145,12 +132,13 @@ int main(void) {
         original_size = 0U;
         compressed_size = 0U;
 
-        if (snprintf(compressed_path, sizeof(compressed_path), "%s/%s.lz78", ARTIFACT_DIR, name) >= (int)sizeof(compressed_path) ||
-            snprintf(decompressed_path, sizeof(decompressed_path), "%s/%s.roundtrip.c", ARTIFACT_DIR, name) >= (int)sizeof(decompressed_path)) {
+        if (strlen(ARTIFACT_DIR) + strlen(name) + 10 >= MAX_PATH_LEN) {
             fprintf(stderr, "Path too long for input %s\n", input_path);
             had_failure = 1;
             continue;
         }
+        sprintf(compressed_path,   "%s/%s.lz78",      ARTIFACT_DIR, name);
+        sprintf(decompressed_path, "%s/%s.roundtrip", ARTIFACT_DIR, name);
 
         printf("\nCompressing %s\n", input_path);
         lz78Compress((char *)input_path, compressed_path);
