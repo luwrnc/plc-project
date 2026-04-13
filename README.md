@@ -1,100 +1,61 @@
-# LZ78 Compression Tool
+# LZ78 (C Program)
 
-A Python command-line tool that compresses and decompresses any file using the LZ78 algorithm with guaranteed lossless round-trip integrity.
+This repository is centered on a C implementation of LZ78 compression and decompression.
 
-## Project Structure
+## Project Layout
 
 ```
 plc-project/
-├── lz78.py            # Core LZ78 compress/decompress functions
-├── cli.py             # Command-line interface (entry point)
-├── requirements.txt   # Python dependencies (pytest)
-├── tests/
-│   ├── test_lz78.py   # Correctness tests + image round-trip tests
-│   └── images/        # 2 JPEG test images
-└── README.md
+├── lz78.c
+├── lz78.h
+├── main.c
+├── test.c
+├── Makefile
+└── tests/
+    ├── images/
+    │   ├── 1675398821215.jpeg
+    │   └── images_2.jpeg
+    ├── test_lz78.py
+    └── python/
+        ├── __init__.py
+        ├── lz78.py
+        ├── cli.py
+        └── requirements.txt
 ```
 
-### File Summary
+Notes:
+- Top-level build/run flow is C-only.
+- Python files are kept under `tests/python/` as test/reference utilities.
 
-- **`lz78.py`** — Implements the LZ78 algorithm. Provides `compress(data) -> bytes` and `decompress(data) -> bytes`. Builds a dictionary of seen byte patterns and encodes them as (index, next_byte) pairs in a compact binary format.
-- **`cli.py`** — Command-line wrapper around `lz78.py`. Accepts `-c` (compress) or `-d` (decompress), `-i` (input file), `-o` (output file), and `-v` (verbose stats).
-- **`tests/test_lz78.py`** — Pytest test suite with 5 core correctness tests (empty input, strings, null bytes, repetitive data, all byte values) and 1 image round-trip test that compresses and decompresses both JPEG images and verifies zero data loss.
-
-## How to Run
-
-### Install dependencies
+## Build
 
 ```bash
-pip install -r requirements.txt
+make build
 ```
 
-### Compress a file
+This builds:
+- `lz78_main` (CLI wrapper from `main.c`)
+- `lz78_test` (round-trip test from `test.c`)
+
+## Run C CLI
 
 ```bash
-python3 cli.py -c -i <input_file> -o <output_file>
+./lz78_main -c <input_file> <output_file>
+./lz78_main -d <input_file> <output_file>
 ```
 
-### Decompress a file
+## Run C Round-Trip Test
 
 ```bash
-python3 cli.py -d -i <input_file.lz78> -o <output_file>
+make test
 ```
 
-### Examples
+Generated test artifacts are written to `tests/artifacts/`.
+
+## Clean
 
 ```bash
-# Compress an image (output auto-named as .lz78)
-python3 cli.py -c -i tests/images/1675398821215.jpeg -v
-
-# Decompress it back
-python3 cli.py -d -i tests/images/1675398821215.jpeg.lz78 -o restored.jpeg -v
-
-# Compress a text file
-python3 cli.py -c -i myfile.txt -o myfile.txt.lz78 -v
+make clean
 ```
 
-### Run tests
-
-```bash
-python3 -m pytest tests/test_lz78.py -v
-```
-
-To print the per-image integrity details from the round-trip test, run:
-
-```bash
-python3 -m pytest tests/test_lz78.py -v -s
-```
-
-You will see output confirming that the original and decompressed bytes are identical for each image.
-
-### Verify no data loss manually
-
-After compressing and decompressing a file, compare the original and restored files byte-for-byte:
-
-```bash
-diff <(xxd "tests/images/images (2).jpeg") <(xxd "images_2_decompressed.jpeg") \
-	&& echo "Image 2: IDENTICAL" \
-	|| echo "Image 2: DIFFERENT"
-```
-
-You can also compare hashes:
-
-```bash
-shasum -a 256 "tests/images/images (2).jpeg" "images_2_decompressed.jpeg"
-```
-
-## CLI Options
-
-| Flag        | Description                                  |
-| ----------- | -------------------------------------------- |
-| `-c`        | Compress mode                                |
-| `-d`        | Decompress mode                              |
-| `-i <file>` | Input file path (required)                   |
-| `-o <file>` | Output file path (auto-generated if omitted) |
-| `-v`        | Verbose — print size, ratio, time stats      |
-
-## Notes
-
-- Compression is **lossless**: `decompress(compress(file)) == original file` for any input.
-- JPEG/PNG files are already compressed, so LZ78 output will be _larger_ than the original. LZ78 works best on uncompressed data like plain text or raw binary.
+This removes binaries, object files, and generated artifacts.

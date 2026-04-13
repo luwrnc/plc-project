@@ -8,7 +8,7 @@ Core correctness tests and image round-trip tests.
 import os
 import hashlib
 import pytest
-from lz78 import compress, decompress, compress_ratio
+from tests.python.lz78 import compress, decompress, compress_ratio
 
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
 
