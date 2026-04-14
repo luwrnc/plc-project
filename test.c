@@ -156,8 +156,8 @@ int main(void) {
             read_file(compressed_path, &compressed, &compressed_size) &&
             original_size > 0U) {
             double ratio = (double)compressed_size / (double)original_size;
-            printf("Original:   %zu bytes\n", original_size);
-            printf("Compressed: %zu bytes\n", compressed_size);
+            printf("Original:   %lu bytes\n", (unsigned long)original_size);
+            printf("Compressed: %lu bytes\n", (unsigned long)compressed_size);
             printf("Ratio:      %.3f\n", ratio);
         }
 
