@@ -140,7 +140,7 @@ def compress_ratio(original: bytes, compressed: bytes) -> float:
 
 if __name__ == '__main__':
     # Simple test
-    test_data = b"abracadabra"
+    test_data = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaforehuigrehfbuifguifuhqbjifebuwheiuwf3qvr3ubracadabra"
     compressed = compress(test_data)
     decompressed = decompress(compressed)
     

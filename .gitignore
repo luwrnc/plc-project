@@ -58,3 +58,14 @@ dkms.conf
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Project artifacts
+lz78_main
+lz78_test
+tests/artifacts/
+tests/images/*.lz78
+tests/images/*.roundtrip.*
+tests/images/compare_outputs/
+tests/texts/*.lz78
+tests/texts/*.roundtrip.*
+tests/texts/compare_outputs/

@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from lz78 import compress, decompress, compress_ratio
+from .lz78 import compress, decompress, compress_ratio
 
 
 def parse_args():
