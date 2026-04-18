@@ -64,6 +64,7 @@ static int write_u32_le(FILE *fp, uint32_t value) {
 	return fwrite(b, 1U, 4U, fp) == 4U;
 }
 
+/* reads a single byte from the file into value, returns 0 if we hit end of file */
 static int read_u8(FILE *fp, unsigned char *value) {
 	int ch = fgetc(fp);
 	if (ch == EOF) {
@@ -73,11 +74,14 @@ static int read_u8(FILE *fp, unsigned char *value) {
 	return 1;
 }
 
+/* reads a 4-byte little-endian integer from the file
+   we read each byte separately and then combine them into a uint32 */
 static int read_u32_le(FILE *fp, uint32_t *value) {
 	unsigned char b[4];
 	if (fread(b, 1U, 4U, fp) != 4U) {
 		return 0;
 	}
+	/* shift each byte into its correct position and OR them together */
 	*value = (uint32_t)b[0] |
 		((uint32_t)b[1] << 8) |
 		((uint32_t)b[2] << 16) |
@@ -85,6 +89,9 @@ static int read_u32_le(FILE *fp, uint32_t *value) {
 	return 1;
 }
 
+/* writes the decoded string for a dictionary entry to the output file
+   the dictionary is stored as a tree, so we have to walk up from idx to the root
+   collecting characters into scratch, then write them out in reverse order */
 static int write_phrase(FILE *dest,
 		const uint32_t *parent,
 		const unsigned char *symbol,
@@ -94,6 +101,7 @@ static int write_phrase(FILE *dest,
 	size_t len = 0U;
 	uint32_t cur = idx;
 
+	/* walk up the parent chain and collect symbols backwards into scratch */
 	while (cur != 0U) {
 		if (cur >= dict_size || len >= MAX_DICT_SIZE) {
 			return 0;
@@ -102,6 +110,7 @@ static int write_phrase(FILE *dest,
 		cur = parent[cur];
 	}
 
+	/* now write scratch in reverse so the output is in the correct order */
 	while (len > 0U) {
 		len--;
 		if (fputc((int)scratch[len], dest) == EOF) {
@@ -222,15 +231,18 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 	fclose(src);
 	fclose(dest);
 }
+/* decompresses an LZ78-encoded file back to its original form
+   we rebuild the same dictionary that was used during compression
+   and use it to decode each (index, byte) pair back into the original bytes */
 void lz78Decompress( char * srcFilePath, char * destFilePath){
 	FILE *src;
 	FILE *dest;
 	unsigned char header[sizeof(MAGIC_HEADER)];
 	uint32_t num_entries;
 	unsigned char has_tail;
-	uint32_t *parent;
-	unsigned char *symbol;
-	unsigned char *scratch;
+	uint32_t *parent;   /* parent[i] = the dictionary entry that entry i extends */
+	unsigned char *symbol; /* symbol[i] = the last character added for entry i */
+	unsigned char *scratch; /* temp buffer used to reverse the phrase when writing */
 	uint32_t dict_size;
 	uint32_t i;
 
@@ -247,6 +259,7 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* check the magic header to make sure this is actually an LZ78 file */
 	if (fread(header, 1U, sizeof(header), src) != sizeof(header) ||
 		memcmp(header, MAGIC_HEADER, sizeof(MAGIC_HEADER)) != 0) {
 		fprintf(stderr, "Invalid LZ78 header in '%s'\n", srcFilePath);
@@ -255,6 +268,8 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* read num_entries (how many full coded pairs there are) and has_tail
+	   has_tail tells us if there is a leftover partial phrase at the end */
 	if (!read_u32_le(src, &num_entries) || !read_u8(src, &has_tail) || (has_tail != 0U && has_tail != 1U)) {
 		fprintf(stderr, "Corrupted LZ78 stream in '%s'\n", srcFilePath);
 		fclose(src);
@@ -262,6 +277,8 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* allocate arrays for the decompression dictionary
+	   parent and symbol together form a tree that lets us decode any entry */
 	parent = (uint32_t *)malloc((size_t)MAX_DICT_SIZE * sizeof(uint32_t));
 	symbol = (unsigned char *)malloc((size_t)MAX_DICT_SIZE * sizeof(unsigned char));
 	scratch = (unsigned char *)malloc((size_t)MAX_DICT_SIZE * sizeof(unsigned char));
@@ -275,6 +292,8 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* entry 0 is a special root/empty node, then entries 1-256 represent single bytes
+	   this mirrors how the compressor initialized its own dictionary */
 	parent[0] = 0U;
 	symbol[0] = 0U;
 	dict_size = 257U;
@@ -283,10 +302,13 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		symbol[i + 1U] = (unsigned char)i;
 	}
 
+	/* main decoding loop - each iteration reads one (index, byte) pair
+	   the index refers to an existing dictionary entry, and byte is the new character */
 	for (i = 0U; i < num_entries; i++) {
 		uint32_t idx;
 		unsigned char next_byte;
 
+		/* read the index and the new byte from the compressed stream */
 		if (!read_u32_le(src, &idx) || !read_u8(src, &next_byte) || idx >= dict_size) {
 			fprintf(stderr, "Corrupted LZ78 stream in '%s'\n", srcFilePath);
 			free(parent);
@@ -297,6 +319,7 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 			return;
 		}
 
+		/* write the phrase for this entry, then write the new byte after it */
 		if (!write_phrase(dest, parent, symbol, dict_size, idx, scratch) ||
 			fputc((int)next_byte, dest) == EOF) {
 			fprintf(stderr, "Write error for '%s'\n", destFilePath);
@@ -308,6 +331,7 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 			return;
 		}
 
+		/* add the new entry to the dictionary, same way the compressor did */
 		if (dict_size < MAX_DICT_SIZE) {
 			parent[dict_size] = idx;
 			symbol[dict_size] = next_byte;
@@ -315,6 +339,8 @@ void lz78Decompress( char * srcFilePath, char * destFilePath){
 		}
 	}
 
+	/* if has_tail is set, there is one last partial phrase with no trailing byte
+	   this happens when the input ended mid-phrase during compression */
 	if (has_tail != 0U) {
 		uint32_t idx;
 		if (!read_u32_le(src, &idx) || idx >= dict_size) {
