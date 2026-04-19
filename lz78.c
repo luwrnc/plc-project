@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_DICT_SIZE (1U << 20)	// 1,048,576 entries max (for 1 million+ unique patterns)
-#define HASH_CAPACITY (1U << 21)	// 2,097,152 slots (2x for efficiency)
+#define MAX_DICT_SIZE (1U << 20)	/* 1,048,576 entries max (for 1 million+ unique patterns) */
+#define HASH_CAPACITY (1U << 21)	/* 2,097,152 slots (2x for efficiency) */
 
 static const unsigned char MAGIC_HEADER[5] = {'L', 'Z', '7', '8', 0x02};
 
@@ -170,7 +170,7 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 
 	/*Initialize dictionary with all 256 single-byte entries*/
     /*Entry 1 = 0x00, Entry 2 = 0x01, ..., Entry 256 = 0xFF*/
-	dict_size = 257U;	// to mark the next free entry index to be 257*/
+	dict_size = 257U;	/* next free dictionary entry index */
 	for (ch = 0; ch < 256; ch++) {	
 		dict_insert(dictionary, 0U, (unsigned char)ch, (uint32_t)ch + 1U);
 	}
@@ -178,7 +178,7 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 	full_entries = 0U;	/*to count how many (index,byte) pairs we output.
 						  The 256 default entries are implicit and are not written so NOT counted */
 
-	w_index = 0U;		// current phrase index (0 = empty/root). A running state variable
+	w_index = 0U;		/* current phrase index (0 = empty/root) */
 
     /*===========================================================*/
     /* MAIN COMPRESSION LOOP                                      */
@@ -198,7 +198,7 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 		if (wc_index != 0U) {
 			/*FOUND: Extend current phrase*/
             /*Example: had "t" (index 116), read 'h' -> found "th" at index 257*/
-			w_index = wc_index;		//Makes the phrase longer by
+			w_index = wc_index;
 
 			/*FOUND: After we chain the new byte to the current phase,
 					the  loop ends here for FOUND state.*/
