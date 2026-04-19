@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_DICT_SIZE (1U << 20)
-#define HASH_CAPACITY (1U << 21)
+#define MAX_DICT_SIZE (1U << 20)	// 1,048,576 entries max (for 1 million+ unique patterns)
+#define HASH_CAPACITY (1U << 21)	// 2,097,152 slots (2x for efficiency)
 
 static const unsigned char MAGIC_HEADER[5] = {'L', 'Z', '7', '8', 0x02};
 
@@ -132,61 +132,89 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 	int ch;
 	unsigned char has_tail;
 
+	/*Open source file to read binaries*/
 	src = fopen(srcFilePath, "rb");
 	if (src == NULL) {
 		fprintf(stderr, "Cannot open '%s': %s\n", srcFilePath, strerror(errno));
 		return;
 	}
 
+	/*Open destination file for later write compressed results*/
 	dest = fopen(destFilePath, "wb");
 	if (dest == NULL) {
 		fprintf(stderr, "Cannot open '%s': %s\n", destFilePath, strerror(errno));
-		fclose(src);
+		fclose(src);		/*clean up on error*/
 		return;
 	}
 
+	/*Allocate memory for dictionary*/
 	dictionary = (DictSlot *)calloc(HASH_CAPACITY, sizeof(DictSlot));
 	if (dictionary == NULL) {
 		fprintf(stderr, "Memory allocation failed\n");
-		fclose(src);
+		fclose(src);		/*clean up on error*/
 		fclose(dest);
 		return;
 	}
 
+	/*Write our own LZ78 file header*/
+	/*Write  Magic Header (5 bytes), num_entries placeholder (4 bytes), has_tail placeholder(1 byte)*/
 	if (fwrite(MAGIC_HEADER, 1U, sizeof(MAGIC_HEADER), dest) != sizeof(MAGIC_HEADER) ||
 		!write_u32_le(dest, 0U) ||
 		!write_u8(dest, 0U)) {
 		fprintf(stderr, "Write error for '%s'\n", destFilePath);
-		free(dictionary);
-		fclose(src);
+		free(dictionary);	/*clean up on error*/
+		fclose(src);	
 		fclose(dest);
 		return;
 	}
 
-	dict_size = 257U;
-	for (ch = 0; ch < 256; ch++) {
+	/*Initialize dictionary with all 256 single-byte entries*/
+    /*Entry 1 = 0x00, Entry 2 = 0x01, ..., Entry 256 = 0xFF*/
+	dict_size = 257U;	// to mark the next free entry index to be 257*/
+	for (ch = 0; ch < 256; ch++) {	
 		dict_insert(dictionary, 0U, (unsigned char)ch, (uint32_t)ch + 1U);
 	}
 
-	full_entries = 0U;
-	w_index = 0U;
+	full_entries = 0U;	/*to count how many (index,byte) pairs we output.
+						  The 256 default entries are implicit and are not written so NOT counted */
 
+	w_index = 0U;		// current phrase index (0 = empty/root). A running state variable
+
+    /*===========================================================*/
+    /* MAIN COMPRESSION LOOP                                      */
+    /*===========================================================*/
 	for (;;) {
 		uint32_t wc_index;
+
+		/*Read one byte from input file*/
 		ch = fgetc(src);
 		if (ch == EOF) {
 			break;
 		}
 
+		/*Try to find (current phrase + new byte) in dictionary*/
 		wc_index = dict_find(dictionary, w_index, (unsigned char)ch);
+
 		if (wc_index != 0U) {
-			w_index = wc_index;
+			/*FOUND: Extend current phrase*/
+            /*Example: had "t" (index 116), read 'h' -> found "th" at index 257*/
+			w_index = wc_index;		//Makes the phrase longer by
+
+			/*FOUND: After we chain the new byte to the current phase,
+					the  loop ends here for FOUND state.*/
+
 		} else {
+			 /*NOT FOUND: Output current phrase and new byte
+			   New entry need to be made*/
+
+			/*Add new phrase to dictionary (if there is space)*/
 			if (dict_size < MAX_DICT_SIZE) {
 				dict_insert(dictionary, w_index, (unsigned char)ch, dict_size);
 				dict_size++;
 			}
 
+			/*Write compressed output: (index of current phrase, next byte)*/
+            /*Example: (116, 'h') meaning "th"*/
 			if (!write_u32_le(dest, w_index) || !write_u8(dest, (unsigned char)ch)) {
 				fprintf(stderr, "Write error for '%s'\n", destFilePath);
 				free(dictionary);
@@ -195,11 +223,22 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 				return;
 			}
 
+			/*Count the new (index,byte) pair written*/
 			full_entries++;
+
+			/*Reset to root/empty for next phrase*/
 			w_index = 0U;
+
+			/*The next loop iteration will be a fresh state: no current phrase*/
 		}
 	}
+	/*===========================================================*/
+	/*At this point the entries are all filled.*/
+	/*  Below are just checks if the parsing worked without errors*/
+	/*  Only on no error do we write into the file.*/
 
+	/* Check for read errors that aren't normal EOF */
+	/* If true, the compressed data may be corrupt/incomplete */
 	if (ferror(src)) {
 		fprintf(stderr, "Read error for '%s'\n", srcFilePath);
 		free(dictionary);
@@ -208,7 +247,11 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* Determine if there is a trailing partial phrase */
+	/* w_index != 0 means we have an incomplete phrase */
 	has_tail = (unsigned char)(w_index != 0U ? 1U : 0U);
+
+	/* Write the tail index if it exists*/
 	if (has_tail && !write_u32_le(dest, w_index)) {
 		fprintf(stderr, "Write error for '%s'\n", destFilePath);
 		free(dictionary);
@@ -217,6 +260,8 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/* Seek back to the header (after magic bytes) and overwrite placeholders */
+	/* Write actual num_entries (full_entries) and has_tail flag */
 	if (fseek(dest, (long)sizeof(MAGIC_HEADER), SEEK_SET) != 0 ||
 		!write_u32_le(dest, full_entries) ||
 		!write_u8(dest, has_tail)) {
@@ -227,10 +272,14 @@ void lz78Compress( char * srcFilePath, char * destFilePath){
 		return;
 	}
 
+	/*Free dict memory*/
 	free(dictionary);
+
+	/*Close files*/
 	fclose(src);
 	fclose(dest);
 }
+
 /* decompresses an LZ78-encoded file back to its original form
    we rebuild the same dictionary that was used during compression
    and use it to decode each (index, byte) pair back into the original bytes */
