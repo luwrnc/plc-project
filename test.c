@@ -14,6 +14,7 @@
 #define MAX_PATH_LEN 1024
 
 static const char *TEST_FILES[] = {
+    "tests/images/sample_1920×1280.bmp",
     "tests/images/1675398821215.jpeg",
     "tests/images/images_2.jpeg",
     "tests/texts/mobydick.txt",
